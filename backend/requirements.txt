@@ -1,0 +1,9 @@
+# backend/requirements.txt
+fastapi
+uvicorn
+python-multipart
+textblob
+pandas
+pydantic
+python-jose
+python-dotenv

@@ -1,0 +1,98 @@
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# IDEs and editor folders
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+.project
+.classpath
+.settings/
+
+# Node.js dependencies (frontend)
+node_modules/
+
+# Environment files (both frontend and backend)
+# Frontend environment files
+/frontend/.env
+/frontend/.env.local
+/frontend/.env.development
+/frontend/.env.development.local
+/frontend/.env.test.local
+/frontend/.env.production
+/frontend/.env.production.local
+
+# Backend environment files
+/backend/.env
+/backend/.env.local
+/backend/.env.development
+/backend/.env.development.local
+/backend/.env.test.local
+/backend/.env.production
+/backend/.env.production.local
+
+# Testing
+/coverage
+.npm
+
+# Build directories
+/build
+/dist
+/.pnp
+.pnp.js
+
+# Cache and logs
+.cache/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python related files (backend)
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports (backend)
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Backend distribution / packaging (backend)
+dist/
+build/
+*.egg-info/
+eggs/
+*.egg
+
+# Database files (backend)
+db.sqlite3
+db.sqlite3-journal
+
+# Optional: Local development files
+*.local
+
+# Optional: Local test files
+test/
