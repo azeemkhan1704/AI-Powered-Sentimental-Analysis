@@ -3,8 +3,9 @@ from textblob import TextBlob
 import pandas as pd
 from typing import List
 from .models import TextEntry, SentimentResponse
+from typing import Tuple
 
-def analyze_sentiment(text: str) -> tuple[str, float]:
+def analyze_sentiment(text: str) -> Tuple[str, float]:
     analysis = TextBlob(text)
     # Convert polarity to sentiment label
     if analysis.sentiment.polarity > 0:
