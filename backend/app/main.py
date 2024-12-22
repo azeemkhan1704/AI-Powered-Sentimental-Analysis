@@ -1,45 +1,72 @@
-# Backend Implementation (backend/app/main.py)
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header
+# backend/app/main.py
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
+from fastapi.responses import JSONResponse
 import pandas as pd
-from .sentiment import analyze_sentiment
-from .models import SentimentResponse
+import io
 import os
+from typing import List
+from .sentiment import process_dataframe
+from .models import SentimentResponse, SentimentBatchResponse
+from .auth import get_api_key
 from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(title="Sentiment Analysis API")
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        os.getenv("FRONTEND_URL", "http://65.1.112.82")
+        os.getenv("FRONTEND_URL", "http://65.1.112.82"),
+        "http://65.1.112.82"  # Your EC2 IP
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.post("/analyze")
+@app.post("/analyze", response_model=List[SentimentResponse])
 async def analyze_file(
     file: UploadFile = File(...),
-    x_api_key: Optional[str] = Header(None)
+    api_key: str = Depends(get_api_key)
 ):
-    # API key validation
-    if x_api_key != os.getenv("API_KEY"):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-    
     try:
-        # Read CSV file
-        df = pd.read_csv(file.file)
+        # Read the file content
+        contents = await file.read()
         
-        # Perform sentiment analysis
-        results = analyze_sentiment(df)
+        # Check if file is empty
+        if not contents:
+            raise HTTPException(status_code=400, detail="Empty file")
+            
+        # Convert to DataFrame
+        try:
+            df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error reading CSV file: {str(e)}"
+            )
+            
+        # Validate required columns
+        if 'text' not in df.columns:
+            raise HTTPException(
+                status_code=400,
+                detail="CSV must contain a 'text' column"
+            )
+            
+        # Process the data
+        results = process_dataframe(df)
         
+        if not results:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid text entries found in file"
+            )
+            
         return results
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
