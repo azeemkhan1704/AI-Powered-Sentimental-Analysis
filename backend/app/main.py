@@ -1,43 +1,45 @@
-# backend/app/main.py
-from fastapi import FastAPI, File, UploadFile, Depends
+# Backend Implementation (backend/app/main.py)
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
-import shutil
-import tempfile
-from .auth import get_api_key
-from .sentiment import process_csv
-from typing import List
+from typing import Optional
+import pandas as pd
+from .sentiment import analyze_sentiment
 from .models import SentimentResponse
+import os
+from dotenv import load_dotenv
 
-app = FastAPI(title="Sentiment Analysis API")
+load_dotenv()
 
-# Configure CORS
+app = FastAPI()
+
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend domain
+    allow_origins=[
+        "http://localhost:3000",
+        os.getenv("FRONTEND_URL", "http://65.1.112.82")
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.post("/analyze", response_model=List[SentimentResponse])
+@app.post("/analyze")
 async def analyze_file(
     file: UploadFile = File(...),
-    api_key: str = Depends(get_api_key)
+    x_api_key: Optional[str] = Header(None)
 ):
-    # Save uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-        shutil.copyfileobj(file.file, temp_file)
-        temp_path = temp_file.name
+    # API key validation
+    if x_api_key != os.getenv("API_KEY"):
+        raise HTTPException(status_code=401, detail="Invalid API key")
     
-    # Process the CSV file
-    results = process_csv(temp_path)
-    
-    # Clean up
-    import os
-    os.unlink(temp_path)
-    
-    return results
-
-@app.get("/")
-async def root():
-    return {"message": "Welcome to Sentiment Analysis API"}
+    try:
+        # Read CSV file
+        df = pd.read_csv(file.file)
+        
+        # Perform sentiment analysis
+        results = analyze_sentiment(df)
+        
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
