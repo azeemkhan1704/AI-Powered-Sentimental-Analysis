@@ -1,72 +1,44 @@
-# backend/app/main.py
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+# backend/app/sentiment.py
+from textblob import TextBlob
 import pandas as pd
+from typing import List, Tuple
+from .models import TextEntry, SentimentResponse
 import io
-import os
-from typing import List
-from .sentiment import process_dataframe
-from .models import SentimentResponse, SentimentBatchResponse
-from .auth import get_api_key
-from dotenv import load_dotenv
 
-load_dotenv()
+def analyze_sentiment(text: str) -> Tuple[str, float]:
+    """
+    Analyze sentiment of given text using TextBlob.
+    Returns a tuple of (sentiment_label, polarity_score)
+    """
+    analysis = TextBlob(str(text))
+    # Convert polarity to sentiment label
+    if analysis.sentiment.polarity > 0:
+        return "positive", analysis.sentiment.polarity
+    elif analysis.sentiment.polarity < 0:
+        return "negative", analysis.sentiment.polarity
+    return "neutral", analysis.sentiment.polarity
 
-app = FastAPI(title="Sentiment Analysis API")
-
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        os.getenv("FRONTEND_URL", "http://65.1.112.82"),
-        "http://65.1.112.82"  # Your EC2 IP
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.post("/analyze", response_model=List[SentimentResponse])
-async def analyze_file(
-    file: UploadFile = File(...),
-    api_key: str = Depends(get_api_key)
-):
-    try:
-        # Read the file content
-        contents = await file.read()
+def process_dataframe(df: pd.DataFrame) -> List[dict]:
+    """
+    Process DataFrame and return sentiment analysis results
+    """
+    results = []
+    
+    for index, row in df.iterrows():
+        # Ensure text column exists and handle missing values
+        text = str(row.get('text', '')).strip()
+        if not text:
+            continue
+            
+        sentiment_label, score = analyze_sentiment(text)
         
-        # Check if file is empty
-        if not contents:
-            raise HTTPException(status_code=400, detail="Empty file")
-            
-        # Convert to DataFrame
-        try:
-            df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
-        except Exception as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error reading CSV file: {str(e)}"
-            )
-            
-        # Validate required columns
-        if 'text' not in df.columns:
-            raise HTTPException(
-                status_code=400,
-                detail="CSV must contain a 'text' column"
-            )
-            
-        # Process the data
-        results = process_dataframe(df)
-        
-        if not results:
-            raise HTTPException(
-                status_code=400,
-                detail="No valid text entries found in file"
-            )
-            
-        return results
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        result = {
+            "id": index,
+            "text": text,
+            "sentiment": sentiment_label,
+            "score": float(score),
+            "timestamp": row.get('timestamp') if 'timestamp' in row else None
+        }
+        results.append(result)
+    
+    return results
