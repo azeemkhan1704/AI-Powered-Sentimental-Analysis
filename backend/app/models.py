@@ -1,7 +1,7 @@
 # backend/app/models.py
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 class TextEntry(BaseModel):
     id: int
@@ -14,3 +14,6 @@ class SentimentResponse(BaseModel):
     sentiment: str
     score: float
     timestamp: Optional[datetime] = None
+
+class SentimentBatchResponse(BaseModel):
+    results: List[SentimentResponse]
