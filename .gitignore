@@ -18,6 +18,7 @@ node_modules/
 # Environment files (both frontend and backend)
 # Frontend environment files
 /frontend/.env
+/frontend/.env.example
 /frontend/.env.local
 /frontend/.env.development
 /frontend/.env.development.local
@@ -27,6 +28,7 @@ node_modules/
 
 # Backend environment files
 /backend/.env
+/backend/.env.example
 /backend/.env.local
 /backend/.env.development
 /backend/.env.development.local
