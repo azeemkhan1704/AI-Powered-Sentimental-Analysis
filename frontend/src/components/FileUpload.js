@@ -19,10 +19,29 @@ const FileUpload = () => {
     }
   };
 
-  const resetState = () => {
-    setResults([]);
-    setError(null);
-    setFileName('');
+  const validateCSVFormat = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        const lines = text.split('\n');
+        if (lines.length < 2) {
+          reject('File must contain at least one data row');
+          return;
+        }
+        
+        // Check for required headers
+        const headers = lines[0].toLowerCase().trim().split(',');
+        if (!headers.includes('id') || !headers.includes('text')) {
+          reject('CSV must contain "id" and "text" columns');
+          return;
+        }
+        
+        resolve(true);
+      };
+      reader.onerror = () => reject('Error reading file');
+      reader.readAsText(file);
+    });
   };
 
   const processFile = async (file) => {
@@ -40,14 +59,17 @@ const FileUpload = () => {
       return;
     }
 
-    setFileName(file.name);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    setLoading(true);
-    setError(null);
-
     try {
+      // Validate CSV format
+      await validateCSVFormat(file);
+      
+      setFileName(file.name);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      setLoading(true);
+      setError(null);
+
       const response = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
         headers: {
@@ -58,7 +80,7 @@ const FileUpload = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Analysis failed');
+        throw new Error(errorData.detail || 'Analysis failed');
       }
 
       const data = await response.json();
@@ -100,13 +122,15 @@ const FileUpload = () => {
     }));
   };
 
-  const getSentimentColor = (sentiment) => {
-    const colors = {
-      positive: '#4CAF50',
-      neutral: '#FFC107',
-      negative: '#F44336'
-    };
-    return colors[sentiment.toLowerCase()] || '#9E9E9E';
+  const getAverageSentiment = () => {
+    if (!results.length) return null;
+    const avgScore = results.reduce((sum, curr) => sum + curr.score, 0) / results.length;
+    return avgScore.toFixed(3);
+  };
+
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    return new Date(timestamp).toLocaleString();
   };
 
   return (
@@ -149,7 +173,11 @@ const FileUpload = () => {
             <p className="text-lg mb-2">
               Drop your CSV file here or <span className="underline">browse</span>
             </p>
-            <p className="text-sm text-gray-500">Maximum file size: 5MB</p>
+            <p className="text-sm text-gray-500">
+              Required columns: id, text
+              <br />
+              Maximum file size: 5MB
+            </p>
           </div>
         </label>
         {fileName && (
@@ -171,7 +199,7 @@ const FileUpload = () => {
       {loading && (
         <div className="flex items-center justify-center py-8">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          <p className="ml-3">Analyzing your data...</p>
+          <p className="ml-3">Analyzing sentiments...</p>
         </div>
       )}
 
@@ -180,6 +208,24 @@ const FileUpload = () => {
         <div className="bg-white rounded-lg shadow-lg p-6">
           <h2 className="text-2xl font-bold mb-6">Analysis Results</h2>
           
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h4 className="text-sm font-semibold text-blue-700">Total Entries</h4>
+              <p className="text-2xl font-bold">{results.length}</p>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h4 className="text-sm font-semibold text-green-700">Average Sentiment</h4>
+              <p className="text-2xl font-bold">{getAverageSentiment()}</p>
+            </div>
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <h4 className="text-sm font-semibold text-purple-700">Most Common</h4>
+              <p className="text-2xl font-bold capitalize">
+                {prepareChartData().sort((a, b) => b.count - a.count)[0]?.sentiment || 'N/A'}
+              </p>
+            </div>
+          </div>
+
           {/* Chart */}
           <div className="mb-8 h-[400px]">
             <h3 className="text-xl font-semibold mb-4">Sentiment Distribution</h3>
@@ -187,14 +233,13 @@ const FileUpload = () => {
               <BarChart data={prepareChartData()}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="sentiment" />
-                <YAxis yAxisId="left" orientation="left" stroke="#666" />
-                <YAxis yAxisId="right" orientation="right" stroke="#666" />
+                <YAxis />
                 <Tooltip 
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
                         <div className="bg-white p-3 shadow rounded border">
-                          <p className="font-semibold">{payload[0].payload.sentiment}</p>
+                          <p className="font-semibold capitalize">{payload[0].payload.sentiment}</p>
                           <p>Count: {payload[0].payload.count}</p>
                           <p>Percentage: {payload[0].payload.percentage}%</p>
                         </div>
@@ -206,7 +251,6 @@ const FileUpload = () => {
                 <Legend />
                 <Bar 
                   dataKey="count" 
-                  yAxisId="left"
                   fill="#8884d8"
                   radius={[4, 4, 0, 0]}
                 />
@@ -231,6 +275,9 @@ const FileUpload = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Score
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Timestamp
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -244,17 +291,20 @@ const FileUpload = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                        style={{
-                          backgroundColor: `${getSentimentColor(result.sentiment)}20`,
-                          color: getSentimentColor(result.sentiment)
-                        }}
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          result.sentiment === 'positive' ? 'bg-green-100 text-green-800' :
+                          result.sentiment === 'negative' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}
                       >
                         {result.sentiment}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {result.score.toFixed(2)}
+                      {result.score.toFixed(3)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatTimestamp(result.timestamp)}
                     </td>
                   </tr>
                 ))}
@@ -262,10 +312,38 @@ const FileUpload = () => {
             </table>
           </div>
 
-          {/* Reset Button */}
-          <div className="mt-6 text-right">
+          {/* Export & Reset Buttons */}
+          <div className="mt-6 flex justify-end space-x-4">
             <button
-              onClick={resetState}
+              onClick={() => {
+                const csv = [
+                  ['ID', 'Text', 'Sentiment', 'Score', 'Timestamp'],
+                  ...results.map(r => [
+                    r.id,
+                    r.text,
+                    r.sentiment,
+                    r.score,
+                    r.timestamp || ''
+                  ])
+                ].map(row => row.join(',')).join('\n');
+                
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'sentiment-analysis-results.csv';
+                a.click();
+              }}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+            >
+              Export Results
+            </button>
+            <button
+              onClick={() => {
+                setResults([]);
+                setError(null);
+                setFileName('');
+              }}
               className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
             >
               Clear Results
